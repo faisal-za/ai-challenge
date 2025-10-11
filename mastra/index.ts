@@ -22,7 +22,5 @@ export const mastra = new Mastra({
         name: 'Mastra',
         level: 'info',
     }),
-    telemetry: {
-        enabled: true, // Enables OTEL Tracing
-    },
+    telemetry: { enabled: true },
 });
