@@ -4,7 +4,6 @@ import { PinoLogger } from '@mastra/loggers';
 import { LibSQLStore } from '@mastra/libsql';
 import { ICDDiagnosticAgent } from './agents';
 import { PineconeVector } from '@mastra/pinecone';
-import { VercelDeployer } from "@mastra/deployer-vercel";
 
 const pinecone = new PineconeVector({
     apiKey: "pcsk_4JqLbN_JDABaJNYynBNhCBsLE7hPN1ARVM5UFUSMD2uiYGZean7NWWwiLnzbaWnxgyZgyX"
@@ -23,6 +22,5 @@ export const mastra = new Mastra({
         name: 'Mastra',
         level: 'info',
     }),
-    telemetry: { enabled: true },
-    deployer: new VercelDeployer()
+    telemetry: { enabled: true }
 });
