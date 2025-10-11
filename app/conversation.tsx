@@ -9,7 +9,7 @@ import {
     ConversationScrollButton,
 } from '@/components/ai-elements/conversation';
 import { Message, MessageContent } from '@/components/ai-elements/message';
-import { CopyIcon, MessageSquareIcon, ThumbsDownIcon } from 'lucide-react';
+import { CopyIcon, ThumbsDownIcon } from 'lucide-react';
 import {
     PromptInput,
     PromptInputBody,
@@ -27,23 +27,8 @@ import {
     ReasoningContent,
     ReasoningTrigger,
 } from '@/components/ai-elements/reasoning';
-import {
-    Task,
-    TaskContent,
-    TaskItem,
-    TaskItemFile,
-    TaskTrigger,
-} from '@/components/ai-elements/task';
-import {
-    Tool,
-    ToolContent,
-    ToolHeader,
-    ToolOutput,
-    ToolInput,
-} from '@/components/ai-elements/tool';
-import { Loader } from '@/components/ai-elements/loader';
 import TextType from "@/components/TextType"
-import { Spinner, type SpinnerProps } from '@/components/ui/shadcn-io/spinner';
+import { Spinner } from '@/components/ui/shadcn-io/spinner';
 
 const Component = ({ threadId = "", initialMessage = "" }) => {
 
@@ -92,11 +77,12 @@ const Component = ({ threadId = "", initialMessage = "" }) => {
             <Conversation className="relative size-full content-center" style={{ height: '70vh' }}>
                 <ConversationContent>
                     {messages.length === 0 ? (
-                        <ConversationEmptyState
-                            icon={<MessageSquareIcon className="size-6" />}
-                            title="Start a conversation"
-                            description="Messages will appear here as the conversation progresses."
-                        />
+                        // <ConversationEmptyState
+                        //     icon={<MessageSquareIcon className="size-6" />}
+                        //     title="Start a conversation"
+                        //     description="Messages will appear here as the conversation progresses."
+                        // />
+                        <Spinner />
                     ) : (
                         messages.map((item) => {
                             // Merge all reasoning parts into single text
@@ -114,12 +100,11 @@ const Component = ({ threadId = "", initialMessage = "" }) => {
                                             <ReasoningContent>{mergedReasoning}</ReasoningContent>
                                         </Reasoning>
                                     )}
-
                                     {otherParts.map((part, index) => (
                                         <React.Fragment key={index}>
                                             {part.type === 'text' && (
-                                                <MessageContent className={status === "streaming" ? "animate-fade-in animate-duration-300" : ""}>
-                                                    <Response>{part.text}</Response>
+                                                <MessageContent >
+                                                    <Response className={status === "streaming" ? "animate-fade-in animate-duration-500" : ""}>{part.text}</Response>
                                                 </MessageContent>
                                             )}
                                             {item.role === "assistant" && part.type === 'text' && (
@@ -145,7 +130,7 @@ const Component = ({ threadId = "", initialMessage = "" }) => {
                 <ConversationScrollButton />
             </Conversation>
             {status == "streaming" && (
-                <div className='px-4'>
+                <div className='py-4 px-5'>
                     <Spinner variant={"ellipsis"} className=' size-6' />
                 </div>
             )}
