@@ -9,7 +9,7 @@ import {
     ConversationScrollButton,
 } from '@/components/ai-elements/conversation';
 import { Message, MessageContent } from '@/components/ai-elements/message';
-import { CopyIcon, ThumbsDownIcon } from 'lucide-react';
+import { CopyIcon, ThumbsDownIcon, MessageSquareIcon } from 'lucide-react';
 import {
     PromptInput,
     PromptInputBody,
@@ -57,9 +57,8 @@ const Component = ({ threadId = "", initialMessage = "" }) => {
             setMessages(msgs)
         })
 
-    }, [threadId, setMessages])
+    }, [threadId])
 
-    // Send initial message exactly once on component mount, then remove from URL
     useEffect(() => {
         if (initialMessage && threadId && !initialMessageSentRef.current) {
             console.log('Sending initial message once:', initialMessage);
@@ -72,17 +71,22 @@ const Component = ({ threadId = "", initialMessage = "" }) => {
         // eslint-disable-next-line react-hooks/exhaustive-deps
     }, []) // Empty dependency array - runs only once on mount
 
+    useEffect(() => {
+        console.log("Messages", messages)
+    }, [messages])
+
     return (
         <div className='w-full'>
             <Conversation className="relative size-full content-center" style={{ height: '70vh' }}>
                 <ConversationContent>
                     {messages.length === 0 ? (
-                        // <ConversationEmptyState
-                        //     icon={<MessageSquareIcon className="size-6" />}
-                        //     title="Start a conversation"
-                        //     description="Messages will appear here as the conversation progresses."
-                        // />
-                        <Spinner />
+                        <ConversationEmptyState
+                            icon={<MessageSquareIcon className="size-6" />}
+                            title="Start a conversation"
+                            description="Messages will appear here as the conversation progresses."
+                        >
+                            <Spinner />
+                        </ConversationEmptyState>
                     ) : (
                         messages.map((item) => {
                             // Merge all reasoning parts into single text
