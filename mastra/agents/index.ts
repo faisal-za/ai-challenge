@@ -216,7 +216,7 @@ Output structured response:
 → Differential table
 → Clinical details (parsed inclusions, exclusions, axes)
 `,
-    model: "openrouter/",
+    model: "openrouter/google/gemini-2.5-pro",
     tools: { icdDiagnosticTool },
     memory: new Memory({
         options: {
@@ -232,7 +232,7 @@ Output structured response:
             },
             threads: {
                 generateTitle: {
-                    model: mistral("mistral-small-latest"),
+                    model: mistral("magistral-small-2507"),
                     instructions: "Generate a concise title based on the user's first message",
                 },
             }
@@ -247,12 +247,12 @@ Output structured response:
         }),
         embedder: mistral.textEmbedding("mistral-embed"),
     }),
-    scorers: {
-        relevancy: {
-            scorer: createAnswerRelevancyScorer({ model: mistral("mistral-medium-latest") }),
-            sampling: { type: "ratio", rate: 0.5 }
-        }
-    },
+    // scorers: {
+    //     relevancy: {
+    //         scorer: createAnswerRelevancyScorer({ model: mistral("mistral-medium-latest") }),
+    //         sampling: { type: "ratio", rate: 0.5 }
+    //     }
+    // },
     // outputProcessors: [
     //     new SystemPromptScrubber({
     //         model: google("gemini-2.5-flash"),
