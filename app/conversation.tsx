@@ -56,7 +56,7 @@ const Component = ({ threadId = "", initialMessage = "" }) => {
             api: '/api/chat',
             body: { thread: threadId },
         }),
-        
+
         onData: (data) => console.log('Chat data:', data),
         onError: (error) => console.error('Chat error:', error),
         onToolCall: (toolCall) => console.log('Tool call:', toolCall),
@@ -119,7 +119,7 @@ const Component = ({ threadId = "", initialMessage = "" }) => {
                                         <React.Fragment key={index}>
                                             {part.type === 'text' && (
                                                 <MessageContent className={status === "streaming" ? "animate-fade-in animate-duration-300" : ""}>
-                                                    <Response is>{part.text}</Response>
+                                                    <Response>{part.text}</Response>
                                                 </MessageContent>
                                             )}
                                             {item.role === "assistant" && part.type === 'text' && (
