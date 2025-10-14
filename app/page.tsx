@@ -11,8 +11,8 @@ export default async function Home() {
         <SidebarTrigger />
         <Separator orientation="vertical" className="h-6" />
         <div>
-          <h2 className="text-lg font-semibold">Diagnostic System</h2>
-          <p className="text-xs text-muted-foreground">Clinical Decision Support powered by WHO ICD-11</p>
+          <h2 className="text-lg font-semibold">مبكر</h2>
+          <p className="text-xs text-muted-foreground">AI-powered Diabetes Risk Assessment</p>
         </div>
       </header>
 
@@ -20,9 +20,9 @@ export default async function Home() {
         <div className="flex items-center justify-center min-h-full">
           <div className="max-w-2xl w-full mx-auto p-6">
             <div className="text-center mb-12">
-              <h1 className="text-4xl font-bold mb-4">Welcome to ICD-11 Diagnostic</h1>
+              <h1 className="text-4xl font-bold mb-4">Welcome to مبكر</h1>
               <p className="text-lg text-muted-foreground">
-                Select an option from the sidebar to get started, or choose one below:
+                AI-powered diabetes risk assessment system
               </p>
             </div>
 
@@ -35,9 +35,9 @@ export default async function Home() {
                   <div className="rounded-full bg-primary/10 p-4 group-hover:bg-primary/20 transition-colors">
                     <FileTextIcon className="size-8 text-primary" />
                   </div>
-                  <h3 className="text-xl font-semibold">New Patient Case</h3>
+                  <h3 className="text-xl font-semibold">New Patient Assessment</h3>
                   <p className="text-sm text-muted-foreground">
-                    Enter patient information and symptoms for ICD-11 diagnostic analysis
+                    Enter patient information to evaluate diabetes risk level
                   </p>
                 </div>
               </Link>
@@ -47,9 +47,9 @@ export default async function Home() {
                   <div className="rounded-full bg-muted p-4">
                     <MessageSquareIcon className="size-8 text-muted-foreground" />
                   </div>
-                  <h3 className="text-xl font-semibold">View Conversations</h3>
+                  <h3 className="text-xl font-semibold">View Assessments</h3>
                   <p className="text-sm text-muted-foreground">
-                    Select a patient case from the sidebar to view diagnostic conversation
+                    Select a patient assessment from the sidebar to view risk analysis results
                   </p>
                 </div>
               </div>
