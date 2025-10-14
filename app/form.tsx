@@ -49,7 +49,7 @@ const riskAssessmentFormSchema = z.object({
 
     // BLOOD PRESSURE (Required)
     BloodPressure: z.string().min(1, { message: 'Blood Pressure is required' }),
-    BloodPressure_Status: z.enum(['Normal', 'High'], {
+    BloodPressure_Status: z.enum(['Normal', 'High', 'Low'], {
         required_error: 'Blood Pressure Status is required'
     }),
 
