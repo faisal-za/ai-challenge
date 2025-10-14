@@ -61,3 +61,17 @@ export async function CreateThreadWithMessage({ message, resourceId = "demo" }: 
         threadId: thread.id
     };
 }
+
+export async function deleteThread(id: string) {
+
+    try {
+
+        const memory = await myAgent.getMemory();
+        const thread = await memory?.deleteThread(id)
+
+        return thread
+    } catch (err) {
+        console.log(err)
+    }
+
+}

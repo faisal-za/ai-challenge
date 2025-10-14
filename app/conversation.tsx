@@ -156,7 +156,7 @@ const Component = ({ threadId = "", initialMessage = "" }) => {
                     variant="default"
                     size="lg"
                     className="w-full max-w-md cursor-pointer"
-                    disabled={status === "streaming" || status === "loading"}
+                    disabled={status === "streaming"}
                 >
                     <MessageSquareIcon className="size-4 mr-2" />
                     New Patient Assessment

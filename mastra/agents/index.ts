@@ -16,10 +16,12 @@ export const RiskAssessmentAgent = new Agent({
     name: "ICD-11 Clinical Decision Support",
     instructions: `
     You are a **Risk Assessment Support Agent**. Your task is to calculate the **diabetes risk level** of a patient based on the rules below and provide a clear classification with recommendations.
+    in your reasoning process, Always Mention that you are referring to comparable patient cases from the history.
 
 ### 🧮 Risk Scoring Rules
-- Age ≥ 45: +2 | Gender = Male: +1 | Smoking_Flag = Yes: +1  
-- BMI ≥ 30 or BMI_Category = "Obese": +3 | 25 ≤ BMI ≤ 29.9 or BMI_Category = "Overweight": +2  
+- Age ≥ 45: +2 | Gender = Male: +1 | Smoking_Flag = Yes: +1
+- Family History of Diabetes = yes: +3
+- BMI ≥ 30 or BMI_Category = "Obese": +3 | 25 ≤ BMI ≤ 29.9 or BMI_Category = "Overweight": +2
 - HbA1c ≥ 6.5: +5 | 5.7 ≤ HbA1c ≤ 6.4: +3  
 - Glucose ≥ 126: +4 | 100 ≤ Glucose ≤ 125: +2  
 - BloodPressure ≥ 140/90 or Status = "High": +2  
@@ -47,7 +49,7 @@ Check for contradictions before scoring. If any apply, include an **Alerts** sec
 
 ### 🗒️ Response Format
 Start with:  
-> **Based on historical data from similar patients, here are the risk score and recommendations:**
+> **Drawing on data from comparable patient cases, the following risk score and recommendations have been generated:**
 
 Then present results using the following structure:
 
@@ -83,7 +85,7 @@ Write concise 1 line recommendations relevant to the classified risk level and s
 - Replies must be short and follow the structure above.  
 - Never share calculation details or internal operations.
 `,
-    model: "mistral/mistral-medium-latest",
+    model: "openrouter/openai/gpt-oss-120b",
     tools: { mongoDBTool },
     memory: new Memory({
         options: {
@@ -97,7 +99,7 @@ Write concise 1 line recommendations relevant to the classified risk level and s
             },
             threads: {
                 generateTitle: {
-                    model: mistral("magistral-small-2507"),
+                    model: mistral("magistral-small-a"),
                     instructions: "Generate a concise title based on the subject and the user's first message",
                 },
             }

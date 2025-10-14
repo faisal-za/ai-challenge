@@ -34,14 +34,6 @@ export default async function RootLayout({
     resourceId: "demo"
   });
 
-  // Create initial thread if none exist
-  if (threads?.length === 0) {
-    await memory?.createThread({
-      resourceId: "demo",
-      title: "New Patient Case"
-    });
-  }
-
   return (
     <html lang="en">
       <body
@@ -70,3 +62,6 @@ export default async function RootLayout({
     </html>
   );
 }
+
+export const dynamic = "force-dynamic";
+export const revalidate = 0;

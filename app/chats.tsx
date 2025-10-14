@@ -12,6 +12,8 @@ import {
     SidebarMenuItem,
     SidebarMenuButton,
 } from "@/components/ui/sidebar";
+import { deleteThread } from "./actions"
+import { Trash2Icon } from "lucide-react";
 
 export default function Chats({ threads }: { threads: StorageThreadType[] | undefined }) {
     const router = useRouter();
@@ -55,6 +57,14 @@ export default function Chats({ threads }: { threads: StorageThreadType[] | unde
                                         {dayjs(item.createdAt).format('MMM D, YYYY h:mm A')}
                                     </span>
                                 </SidebarMenuButton>
+                                <Button className="mx-auto cursor-pointer  bg-red-300" size={"icon"} onClick={() => {
+
+                                    deleteThread(item?.id)
+                                    router.refresh()
+
+                                }}>
+                                    <Trash2Icon />
+                                </Button>
                             </SidebarMenuItem>
                         ))}
                     </SidebarMenu>
@@ -63,3 +73,5 @@ export default function Chats({ threads }: { threads: StorageThreadType[] | unde
         </>
     )
 }
+
+const dynamic = 'force-dynamic'
