@@ -90,12 +90,11 @@ Write concise 1 line recommendations relevant to the classified risk level and s
     memory: new Memory({
         options: {
             workingMemory: {
-                enabled: true,
+                enabled: false
             },
             semanticRecall: {
-                topK: 10, // Retrieve 3 most similar messages
+                topK: 2, // Retrieve 3 most similar messages
                 messageRange: 2, // Include 2 messages before and after each match
-                scope: 'thread', // Search across all threads for this user
             },
             threads: {
                 generateTitle: {
