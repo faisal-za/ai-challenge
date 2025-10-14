@@ -19,8 +19,8 @@ export default async function ChatPage({
         <SidebarTrigger />
         <Separator orientation="vertical" className="h-6" />
         <div>
-          <h2 className="text-lg font-semibold">Patient Conversation</h2>
-          <p className="text-xs text-muted-foreground">ICD-11 Diagnostic Chat</p>
+          <h2 className="text-lg font-semibold">Diabetes Risk Assessment</h2>
+          <p className="text-xs text-muted-foreground">Patient Risk Analysis Results</p>
         </div>
       </header>
 

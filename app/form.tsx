@@ -6,7 +6,6 @@ import { z } from 'zod';
 import { Button } from '@/components/ui/button';
 import { Form, FormControl, FormDescription, FormField, FormItem, FormLabel, FormMessage } from '@/components/ui/form';
 import { Input } from '@/components/ui/input';
-import { Textarea } from '@/components/ui/textarea';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Checkbox } from '@/components/ui/checkbox';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
@@ -16,116 +15,154 @@ import { useRouter } from 'next/navigation';
 import { CreateThreadWithMessage } from './actions';
 import { Loader2Icon } from 'lucide-react';
 
-const patientFormSchema = z.object({
-    // CRITICAL INPUTS (Required by agent for accurate diagnosis)
-    symptoms: z.string().min(3, { message: 'Symptoms required (min 3 characters)' }),
-    age: z.coerce.number().min(0, { message: 'Age is required' }).max(120, { message: 'Age must be less than 120' }),
-    sex: z.enum(['male', 'female'], {
-        required_error: 'Sex is required for accurate diagnosis'
+// Schema based on Risk Assessment Agent scoring rules
+const riskAssessmentFormSchema = z.object({
+    // DEMOGRAPHICS (Required)
+    Age: z.coerce.number().min(0, { message: 'Age is required' }).max(120),
+    Gender: z.enum(['Male', 'Female'], {
+        required_error: 'Gender is required'
+    }),
+    Smoking_Flag: z.boolean().default(false),
+
+    // BODY METRICS (Required)
+    BMI: z.coerce.number().min(10, { message: 'BMI is required' }).max(60),
+    BMI_Category: z.enum(['Normal', 'Overweight', 'Obese', 'Underweight']).optional(),
+
+    // BLOOD TESTS (Required)
+    HbA1c: z.coerce.number().min(3, { message: 'HbA1c is required' }).max(15),
+    Glucose: z.coerce.number().min(50, { message: 'Glucose is required' }).max(400),
+
+    // BLOOD PRESSURE (Required)
+    BloodPressure: z.string().optional(),
+    BloodPressure_Status: z.enum(['Normal', 'High'], {
+        required_error: 'Blood Pressure Status is required'
     }),
 
-    // HELPFUL INPUTS (Optional but improve diagnostic accuracy)
-    symptomOnset: z.string().optional(),
-    symptomDuration: z.string().optional(),
-    severity: z.enum(['mild', 'moderate', 'severe', 'critical']).optional(),
-    anatomicalLocation: z.string().optional(),
-    medicalHistory: z.string().optional(),
-    currentMedications: z.string().optional(),
-    allergies: z.string().optional(),
-    isPregnant: z.boolean().default(false),
-    recentTravel: z.string().optional(),
-    familyHistory: z.string().optional(),
-    temperature: z.coerce.number().optional(),
-    heartRate: z.coerce.number().optional(),
-    bloodPressure: z.string().optional(),
-    respiratoryRate: z.coerce.number().optional(),
-    oxygenSaturation: z.coerce.number().min(0).max(100).optional(),
-    labResults: z.string().optional(),
+    // CHRONIC CONDITIONS
+    Chronic_Conditions_Count: z.coerce.number().min(0).optional(),
+    Condition_Duration_Days: z.coerce.number().min(0).optional(),
+
+    // MEDICATIONS
+    Chronic_Medications_Count: z.coerce.number().min(0).optional(),
+    Medication_Adherence_Level: z.enum(['Low', 'Medium', 'Good', 'Excellent']).optional(),
+    Active_Medication_Flag: z.boolean().default(false),
+
+    // HEALTHCARE ACCESS
+    Encounters_Last_12m: z.coerce.number().min(0).optional(),
+    Time_Since_Last_Encounter_Days: z.coerce.number().min(0).optional(),
+    Has_Reason_For_Encounter: z.boolean().default(true),
+    Insurance_Coverage_Flag: z.boolean().default(true),
 });
 
-type PatientFormValues = z.infer<typeof patientFormSchema>;
+type RiskAssessmentFormValues = z.infer<typeof riskAssessmentFormSchema>;
 
-export default function PatientIntakeForm() {
+export default function RiskAssessmentForm() {
     const router = useRouter();
     const [isPending, startTransition] = useTransition();
     const [error, setError] = useState<string | null>(null);
 
-    const form = useForm<PatientFormValues>({
-        resolver: zodResolver(patientFormSchema),
+    const form = useForm<RiskAssessmentFormValues>({
+        resolver: zodResolver(riskAssessmentFormSchema),
         defaultValues: {
-            symptoms: '',
-            age: '' as any, // Empty string for number input to avoid uncontrolled warning
-            sex: undefined,
-            symptomOnset: '',
-            symptomDuration: '',
-            severity: undefined,
-            anatomicalLocation: '',
-            medicalHistory: '',
-            currentMedications: '',
-            allergies: '',
-            isPregnant: false,
-            recentTravel: '',
-            familyHistory: '',
-            temperature: '' as any,
-            heartRate: '' as any,
-            bloodPressure: '',
-            respiratoryRate: '' as any,
-            oxygenSaturation: '' as any,
-            labResults: '',
+            Age: '' as any,
+            Gender: undefined,
+            Smoking_Flag: false,
+            BMI: '' as any,
+            BMI_Category: undefined,
+            HbA1c: '' as any,
+            Glucose: '' as any,
+            BloodPressure: '',
+            BloodPressure_Status: undefined,
+            Chronic_Conditions_Count: '' as any,
+            Condition_Duration_Days: '' as any,
+            Chronic_Medications_Count: '' as any,
+            Medication_Adherence_Level: undefined,
+            Active_Medication_Flag: false,
+            Encounters_Last_12m: '' as any,
+            Time_Since_Last_Encounter_Days: '' as any,
+            Has_Reason_For_Encounter: true,
+            Insurance_Coverage_Flag: true,
         },
-        mode: 'onBlur', // Validate on blur for better UX
+        mode: 'onBlur',
     });
 
-    async function onSubmit(data: PatientFormValues) {
+    async function onSubmit(data: RiskAssessmentFormValues) {
         setError(null);
 
-        // Build natural language message from form data
+        // Build natural language message for risk assessment
         const parts: string[] = [];
 
-        if (data.age) parts.push(`${data.age} year old`);
-        if (data.sex) parts.push(data.sex);
-        parts.push(`patient presenting with ${data.symptoms}`);
+        // Demographics
+        parts.push(`## Patient Information`);
+        parts.push(`- **Age:** ${data.Age} years old`);
+        parts.push(`- **Gender:** ${data.Gender}`);
+        if (data.Smoking_Flag) parts.push(`- **Smoking Status:** Active smoker`);
 
-        if (data.symptomDuration) parts.push(`for ${data.symptomDuration}`);
-        if (data.symptomOnset) parts.push(`(onset: ${data.symptomOnset})`);
-        if (data.severity) parts.push(`- severity: ${data.severity}`);
-        if (data.anatomicalLocation) parts.push(`located at ${data.anatomicalLocation}`);
+        // Body Metrics
+        if (data.BMI || data.BMI_Category) {
+            parts.push(``);
+            parts.push(`## Body Metrics`);
+            if (data.BMI) parts.push(`- **BMI:** ${data.BMI}`);
+            if (data.BMI_Category) parts.push(`- **BMI Category:** ${data.BMI_Category}`);
+        }
 
-        const context: string[] = [];
-        if (data.medicalHistory) context.push(`Medical history: ${data.medicalHistory}`);
-        if (data.currentMedications) context.push(`Medications: ${data.currentMedications}`);
-        if (data.allergies) context.push(`Allergies: ${data.allergies}`);
-        if (data.isPregnant) context.push(`Patient is pregnant`);
-        if (data.recentTravel) context.push(`Recent travel: ${data.recentTravel}`);
-        if (data.familyHistory) context.push(`Family history: ${data.familyHistory}`);
+        // Blood Tests
+        if (data.HbA1c || data.Glucose) {
+            parts.push(``);
+            parts.push(`## Blood Tests`);
+            if (data.HbA1c) parts.push(`- **HbA1c:** ${data.HbA1c}%`);
+            if (data.Glucose) parts.push(`- **Glucose:** ${data.Glucose} mg/dL`);
+        }
 
-        const vitals: string[] = [];
-        if (data.temperature) vitals.push(`Temp: ${data.temperature}°C`);
-        if (data.heartRate) vitals.push(`HR: ${data.heartRate} bpm`);
-        if (data.bloodPressure) vitals.push(`BP: ${data.bloodPressure}`);
-        if (data.respiratoryRate) vitals.push(`RR: ${data.respiratoryRate}/min`);
-        if (data.oxygenSaturation) vitals.push(`SpO2: ${data.oxygenSaturation}%`);
-        if (vitals.length > 0) context.push(`Vitals: ${vitals.join(', ')}`);
+        // Blood Pressure
+        if (data.BloodPressure || data.BloodPressure_Status) {
+            parts.push(``);
+            parts.push(`## Blood Pressure`);
+            if (data.BloodPressure) parts.push(`- **Reading:** ${data.BloodPressure} mmHg`);
+            if (data.BloodPressure_Status) parts.push(`- **Status:** ${data.BloodPressure_Status}`);
+        }
 
-        if (data.labResults) context.push(`Labs: ${data.labResults}`);
+        // Chronic Conditions
+        if (data.Chronic_Conditions_Count || data.Condition_Duration_Days) {
+            parts.push(``);
+            parts.push(`## Chronic Conditions`);
+            if (data.Chronic_Conditions_Count) parts.push(`- **Number of Conditions:** ${data.Chronic_Conditions_Count}`);
+            if (data.Condition_Duration_Days) parts.push(`- **Duration:** ${data.Condition_Duration_Days} days since diagnosis`);
+        }
 
-        let message = parts.join(' ');
-        if (context.length > 0) message += `\n\n${context.join('\n')}`;
+        // Medications
+        if (data.Chronic_Medications_Count || data.Medication_Adherence_Level || data.Active_Medication_Flag) {
+            parts.push(``);
+            parts.push(`## Medications`);
+            if (data.Chronic_Medications_Count) parts.push(`- **Number of Medications:** ${data.Chronic_Medications_Count}`);
+            if (data.Medication_Adherence_Level) parts.push(`- **Adherence Level:** ${data.Medication_Adherence_Level}`);
+            if (data.Active_Medication_Flag) parts.push(`- **Currently Taking Medication:** Yes`);
+        }
 
-        console.log('=== PATIENT FORM SUBMITTED ===');
+        // Healthcare Access
+        if (data.Encounters_Last_12m || data.Time_Since_Last_Encounter_Days || !data.Has_Reason_For_Encounter || !data.Insurance_Coverage_Flag) {
+            parts.push(``);
+            parts.push(`## Healthcare Access`);
+            if (data.Encounters_Last_12m !== undefined) parts.push(`- **Encounters (Last 12 months):** ${data.Encounters_Last_12m}`);
+            if (data.Time_Since_Last_Encounter_Days !== undefined) parts.push(`- **Days Since Last Visit:** ${data.Time_Since_Last_Encounter_Days}`);
+            if (!data.Has_Reason_For_Encounter) parts.push(`- **Has Reason for Visit:** No`);
+            if (!data.Insurance_Coverage_Flag) parts.push(`- **Insurance Coverage:** No`);
+        }
+
+        const message = parts.join('\n');
+
+        console.log('=== RISK ASSESSMENT FORM SUBMITTED ===');
         console.log(message);
-        console.log('================================');
+        console.log('=======================================');
 
         // Create thread and redirect to conversation
         startTransition(async () => {
             try {
                 const result = await CreateThreadWithMessage({ message });
-
-                // Redirect to conversation page with the thread ID and initial message in URL
                 router.push(`/chat/${result.threadId}?initialMessage=${encodeURIComponent(message)}`);
             } catch (err) {
                 console.error('Failed to create thread:', err);
-                setError('Failed to create patient case. Please try again.');
+                setError('Failed to create risk assessment. Please try again.');
             }
         });
     }
@@ -133,45 +170,28 @@ export default function PatientIntakeForm() {
     return (
         <Card className="w-full max-w-4xl mx-auto">
             <CardHeader>
-                <CardTitle>Patient Intake Form</CardTitle>
-                <CardDescription>ICD-11 Diagnostic Analysis</CardDescription>
+                <CardTitle>Diabetes Risk Assessment Form</CardTitle>
+                <CardDescription>Patient Risk Evaluation System</CardDescription>
             </CardHeader>
             <CardContent>
                 <Form {...form}>
                     <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-6">
+                        {/* Demographics Section */}
                         <div className="space-y-4">
-                            <h3 className="font-semibold">Critical Information</h3>
+                            <h3 className="font-semibold text-lg">Demographics</h3>
 
-                            <FormField
-                                control={form.control}
-                                name="symptoms"
-                                render={({ field }) => (
-                                    <FormItem>
-                                        <FormLabel>
-                                            Symptoms <span className="text-red-600">*</span>
-                                        </FormLabel>
-                                        <FormControl>
-                                            <Textarea placeholder="Describe symptoms" className="min-h-[80px]" {...field} />
-                                        </FormControl>
-                                        <FormDescription>Primary symptoms or chief complaint (Required)</FormDescription>
-                                        <FormMessage />
-                                    </FormItem>
-                                )}
-                            />
-
-                            <div className="grid md:grid-cols-2 gap-4">
+                            <div className="grid md:grid-cols-3 gap-4">
                                 <FormField
                                     control={form.control}
-                                    name="age"
+                                    name="Age"
                                     render={({ field }) => (
                                         <FormItem>
                                             <FormLabel>
                                                 Age <span className="text-red-600">*</span>
                                             </FormLabel>
                                             <FormControl>
-                                                <Input type="number" placeholder="55" {...field} />
+                                                <Input type="number" placeholder="45" {...field} />
                                             </FormControl>
-                                            <FormDescription className="text-xs">Influences pediatric/geriatric diagnosis</FormDescription>
                                             <FormMessage />
                                         </FormItem>
                                     )}
@@ -179,71 +199,12 @@ export default function PatientIntakeForm() {
 
                                 <FormField
                                     control={form.control}
-                                    name="sex"
+                                    name="Gender"
                                     render={({ field }) => (
                                         <FormItem>
                                             <FormLabel>
-                                                Sex <span className="text-red-600">*</span>
+                                                Gender <span className="text-red-600">*</span>
                                             </FormLabel>
-                                            <Select onValueChange={field.onChange} defaultValue={field.value}>
-                                                <FormControl>
-                                                    <SelectTrigger>
-                                                        <SelectValue placeholder="Select sex" />
-                                                    </SelectTrigger>
-                                                </FormControl>
-                                                <SelectContent>
-                                                    <SelectItem value="male">Male</SelectItem>
-                                                    <SelectItem value="female">Female</SelectItem>
-                                                </SelectContent>
-                                            </Select>
-                                            <FormDescription className="text-xs">Filters gender-specific conditions</FormDescription>
-                                            <FormMessage />
-                                        </FormItem>
-                                    )}
-                                />
-                            </div>
-                        </div>
-
-                        <Separator />
-
-                        <div className="space-y-4">
-                            <h3 className="font-semibold">Symptom Details</h3>
-
-                            <div className="grid md:grid-cols-3 gap-4">
-                                <FormField
-                                    control={form.control}
-                                    name="symptomOnset"
-                                    render={({ field }) => (
-                                        <FormItem>
-                                            <FormLabel>Onset</FormLabel>
-                                            <FormControl>
-                                                <Input placeholder="2 days ago" {...field} />
-                                            </FormControl>
-                                            <FormMessage />
-                                        </FormItem>
-                                    )}
-                                />
-
-                                <FormField
-                                    control={form.control}
-                                    name="symptomDuration"
-                                    render={({ field }) => (
-                                        <FormItem>
-                                            <FormLabel>Duration</FormLabel>
-                                            <FormControl>
-                                                <Input placeholder="5 days" {...field} />
-                                            </FormControl>
-                                            <FormMessage />
-                                        </FormItem>
-                                    )}
-                                />
-
-                                <FormField
-                                    control={form.control}
-                                    name="severity"
-                                    render={({ field }) => (
-                                        <FormItem>
-                                            <FormLabel>Severity</FormLabel>
                                             <Select onValueChange={field.onChange} defaultValue={field.value}>
                                                 <FormControl>
                                                     <SelectTrigger>
@@ -251,10 +212,73 @@ export default function PatientIntakeForm() {
                                                     </SelectTrigger>
                                                 </FormControl>
                                                 <SelectContent>
-                                                    <SelectItem value="mild">Mild</SelectItem>
-                                                    <SelectItem value="moderate">Moderate</SelectItem>
-                                                    <SelectItem value="severe">Severe</SelectItem>
-                                                    <SelectItem value="critical">Critical</SelectItem>
+                                                    <SelectItem value="Male">Male</SelectItem>
+                                                    <SelectItem value="Female">Female</SelectItem>
+                                                </SelectContent>
+                                            </Select>
+                                            <FormMessage />
+                                        </FormItem>
+                                    )}
+                                />
+
+                                <FormField
+                                    control={form.control}
+                                    name="Smoking_Flag"
+                                    render={({ field }) => (
+                                        <FormItem className="flex items-center space-x-3 rounded-md border p-4">
+                                            <FormControl>
+                                                <Checkbox checked={field.value} onCheckedChange={field.onChange} />
+                                            </FormControl>
+                                            <div className="space-y-1 leading-none">
+                                                <FormLabel>Smoker</FormLabel>
+                                            </div>
+                                        </FormItem>
+                                    )}
+                                />
+                            </div>
+                        </div>
+
+                        <Separator />
+
+                        {/* Body Metrics Section */}
+                        <div className="space-y-4">
+                            <h3 className="font-semibold text-lg">Body Metrics</h3>
+
+                            <div className="grid md:grid-cols-2 gap-4">
+                                <FormField
+                                    control={form.control}
+                                    name="BMI"
+                                    render={({ field }) => (
+                                        <FormItem>
+                                            <FormLabel>
+                                                BMI <span className="text-red-600">*</span>
+                                            </FormLabel>
+                                            <FormControl>
+                                                <Input type="number" step="0.1" placeholder="25.5" {...field} />
+                                            </FormControl>
+                                            <FormDescription className="text-xs">Body Mass Index</FormDescription>
+                                            <FormMessage />
+                                        </FormItem>
+                                    )}
+                                />
+
+                                <FormField
+                                    control={form.control}
+                                    name="BMI_Category"
+                                    render={({ field }) => (
+                                        <FormItem>
+                                            <FormLabel>BMI Category</FormLabel>
+                                            <Select onValueChange={field.onChange} defaultValue={field.value}>
+                                                <FormControl>
+                                                    <SelectTrigger>
+                                                        <SelectValue placeholder="Select" />
+                                                    </SelectTrigger>
+                                                </FormControl>
+                                                <SelectContent>
+                                                    <SelectItem value="Underweight">Underweight</SelectItem>
+                                                    <SelectItem value="Normal">Normal</SelectItem>
+                                                    <SelectItem value="Overweight">Overweight</SelectItem>
+                                                    <SelectItem value="Obese">Obese</SelectItem>
                                                 </SelectContent>
                                             </Select>
                                             <FormMessage />
@@ -262,80 +286,247 @@ export default function PatientIntakeForm() {
                                     )}
                                 />
                             </div>
-
-                            <FormField
-                                control={form.control}
-                                name="anatomicalLocation"
-                                render={({ field }) => (
-                                    <FormItem>
-                                        <FormLabel>Location</FormLabel>
-                                        <FormControl>
-                                            <Input placeholder="Chest, abdomen, etc." {...field} />
-                                        </FormControl>
-                                        <FormMessage />
-                                    </FormItem>
-                                )}
-                            />
                         </div>
 
                         <Separator />
 
+                        {/* Blood Tests Section */}
                         <div className="space-y-4">
-                            <h3 className="font-semibold">Medical Context</h3>
-
-                            <FormField
-                                control={form.control}
-                                name="medicalHistory"
-                                render={({ field }) => (
-                                    <FormItem>
-                                        <FormLabel>Medical History</FormLabel>
-                                        <FormControl>
-                                            <Textarea placeholder="Past conditions" {...field} />
-                                        </FormControl>
-                                        <FormMessage />
-                                    </FormItem>
-                                )}
-                            />
-
-                            <FormField
-                                control={form.control}
-                                name="currentMedications"
-                                render={({ field }) => (
-                                    <FormItem>
-                                        <FormLabel>Medications</FormLabel>
-                                        <FormControl>
-                                            <Textarea placeholder="Current medications" {...field} />
-                                        </FormControl>
-                                        <FormMessage />
-                                    </FormItem>
-                                )}
-                            />
-
-                            <FormField
-                                control={form.control}
-                                name="allergies"
-                                render={({ field }) => (
-                                    <FormItem>
-                                        <FormLabel>Allergies</FormLabel>
-                                        <FormControl>
-                                            <Input placeholder="Known allergies" {...field} />
-                                        </FormControl>
-                                        <FormMessage />
-                                    </FormItem>
-                                )}
-                            />
+                            <h3 className="font-semibold text-lg">Blood Tests</h3>
 
                             <div className="grid md:grid-cols-2 gap-4">
                                 <FormField
                                     control={form.control}
-                                    name="isPregnant"
+                                    name="HbA1c"
+                                    render={({ field }) => (
+                                        <FormItem>
+                                            <FormLabel>
+                                                HbA1c (%) <span className="text-red-600">*</span>
+                                            </FormLabel>
+                                            <FormControl>
+                                                <Input type="number" step="0.1" placeholder="5.7" {...field} />
+                                            </FormControl>
+                                            <FormDescription className="text-xs">Hemoglobin A1c</FormDescription>
+                                            <FormMessage />
+                                        </FormItem>
+                                    )}
+                                />
+
+                                <FormField
+                                    control={form.control}
+                                    name="Glucose"
+                                    render={({ field }) => (
+                                        <FormItem>
+                                            <FormLabel>
+                                                Glucose (mg/dL) <span className="text-red-600">*</span>
+                                            </FormLabel>
+                                            <FormControl>
+                                                <Input type="number" placeholder="100" {...field} />
+                                            </FormControl>
+                                            <FormDescription className="text-xs">Blood glucose level</FormDescription>
+                                            <FormMessage />
+                                        </FormItem>
+                                    )}
+                                />
+                            </div>
+                        </div>
+
+                        <Separator />
+
+                        {/* Blood Pressure Section */}
+                        <div className="space-y-4">
+                            <h3 className="font-semibold text-lg">Blood Pressure</h3>
+
+                            <div className="grid md:grid-cols-2 gap-4">
+                                <FormField
+                                    control={form.control}
+                                    name="BloodPressure"
+                                    render={({ field }) => (
+                                        <FormItem>
+                                            <FormLabel>Blood Pressure</FormLabel>
+                                            <FormControl>
+                                                <Input placeholder="120/80" {...field} />
+                                            </FormControl>
+                                            <FormDescription className="text-xs">Systolic/Diastolic (mmHg)</FormDescription>
+                                            <FormMessage />
+                                        </FormItem>
+                                    )}
+                                />
+
+                                <FormField
+                                    control={form.control}
+                                    name="BloodPressure_Status"
+                                    render={({ field }) => (
+                                        <FormItem>
+                                            <FormLabel>
+                                                BP Status <span className="text-red-600">*</span>
+                                            </FormLabel>
+                                            <Select onValueChange={field.onChange} defaultValue={field.value}>
+                                                <FormControl>
+                                                    <SelectTrigger>
+                                                        <SelectValue placeholder="Select" />
+                                                    </SelectTrigger>
+                                                </FormControl>
+                                                <SelectContent>
+                                                    <SelectItem value="Normal">Normal</SelectItem>
+                                                    <SelectItem value="High">High</SelectItem>
+                                                </SelectContent>
+                                            </Select>
+                                            <FormMessage />
+                                        </FormItem>
+                                    )}
+                                />
+                            </div>
+                        </div>
+
+                        <Separator />
+
+                        {/* Chronic Conditions Section */}
+                        <div className="space-y-4">
+                            <h3 className="font-semibold text-lg">Chronic Conditions</h3>
+
+                            <div className="grid md:grid-cols-2 gap-4">
+                                <FormField
+                                    control={form.control}
+                                    name="Chronic_Conditions_Count"
+                                    render={({ field }) => (
+                                        <FormItem>
+                                            <FormLabel>Number of Chronic Conditions</FormLabel>
+                                            <FormControl>
+                                                <Input type="number" placeholder="0" {...field} />
+                                            </FormControl>
+                                            <FormMessage />
+                                        </FormItem>
+                                    )}
+                                />
+
+                                <FormField
+                                    control={form.control}
+                                    name="Condition_Duration_Days"
+                                    render={({ field }) => (
+                                        <FormItem>
+                                            <FormLabel>Condition Duration (Days)</FormLabel>
+                                            <FormControl>
+                                                <Input type="number" placeholder="365" {...field} />
+                                            </FormControl>
+                                            <FormDescription className="text-xs">Days since diagnosis</FormDescription>
+                                            <FormMessage />
+                                        </FormItem>
+                                    )}
+                                />
+                            </div>
+                        </div>
+
+                        <Separator />
+
+                        {/* Medications Section */}
+                        <div className="space-y-4">
+                            <h3 className="font-semibold text-lg">Medications</h3>
+
+                            <div className="grid md:grid-cols-3 gap-4">
+                                <FormField
+                                    control={form.control}
+                                    name="Chronic_Medications_Count"
+                                    render={({ field }) => (
+                                        <FormItem>
+                                            <FormLabel>Number of Medications</FormLabel>
+                                            <FormControl>
+                                                <Input type="number" placeholder="0" {...field} />
+                                            </FormControl>
+                                            <FormMessage />
+                                        </FormItem>
+                                    )}
+                                />
+
+                                <FormField
+                                    control={form.control}
+                                    name="Medication_Adherence_Level"
+                                    render={({ field }) => (
+                                        <FormItem>
+                                            <FormLabel>Adherence Level</FormLabel>
+                                            <Select onValueChange={field.onChange} defaultValue={field.value}>
+                                                <FormControl>
+                                                    <SelectTrigger>
+                                                        <SelectValue placeholder="Select" />
+                                                    </SelectTrigger>
+                                                </FormControl>
+                                                <SelectContent>
+                                                    <SelectItem value="Low">Low</SelectItem>
+                                                    <SelectItem value="Medium">Medium</SelectItem>
+                                                    <SelectItem value="Good">Good</SelectItem>
+                                                    <SelectItem value="Excellent">Excellent</SelectItem>
+                                                </SelectContent>
+                                            </Select>
+                                            <FormMessage />
+                                        </FormItem>
+                                    )}
+                                />
+
+                                <FormField
+                                    control={form.control}
+                                    name="Active_Medication_Flag"
+                                    render={({ field }) => (
+                                        <FormItem className="flex items-center space-x-3 rounded-md border p-4">
+                                            <FormControl>
+                                                <Checkbox checked={field.value} onCheckedChange={field.onChange} />
+                                            </FormControl>
+                                            <div className="space-y-1 leading-none">
+                                                <FormLabel>Currently Taking Medication</FormLabel>
+                                            </div>
+                                        </FormItem>
+                                    )}
+                                />
+                            </div>
+                        </div>
+
+                        <Separator />
+
+                        {/* Healthcare Access Section */}
+                        <div className="space-y-4">
+                            <h3 className="font-semibold text-lg">Healthcare Access</h3>
+
+                            <div className="grid md:grid-cols-2 gap-4">
+                                <FormField
+                                    control={form.control}
+                                    name="Encounters_Last_12m"
+                                    render={({ field }) => (
+                                        <FormItem>
+                                            <FormLabel>Encounters (Last 12 Months)</FormLabel>
+                                            <FormControl>
+                                                <Input type="number" placeholder="0" {...field} />
+                                            </FormControl>
+                                            <FormDescription className="text-xs">Doctor visits in past year</FormDescription>
+                                            <FormMessage />
+                                        </FormItem>
+                                    )}
+                                />
+
+                                <FormField
+                                    control={form.control}
+                                    name="Time_Since_Last_Encounter_Days"
+                                    render={({ field }) => (
+                                        <FormItem>
+                                            <FormLabel>Days Since Last Visit</FormLabel>
+                                            <FormControl>
+                                                <Input type="number" placeholder="30" {...field} />
+                                            </FormControl>
+                                            <FormMessage />
+                                        </FormItem>
+                                    )}
+                                />
+                            </div>
+
+                            <div className="grid md:grid-cols-2 gap-4">
+                                <FormField
+                                    control={form.control}
+                                    name="Has_Reason_For_Encounter"
                                     render={({ field }) => (
                                         <FormItem className="flex items-start space-x-3 rounded-md border p-4">
                                             <FormControl>
                                                 <Checkbox checked={field.value} onCheckedChange={field.onChange} />
                                             </FormControl>
                                             <div className="space-y-1 leading-none">
-                                                <FormLabel>Pregnant</FormLabel>
+                                                <FormLabel>Has Reason for Visit</FormLabel>
                                             </div>
                                         </FormItem>
                                     )}
@@ -343,130 +534,19 @@ export default function PatientIntakeForm() {
 
                                 <FormField
                                     control={form.control}
-                                    name="recentTravel"
+                                    name="Insurance_Coverage_Flag"
                                     render={({ field }) => (
-                                        <FormItem>
-                                            <FormLabel>Recent Travel</FormLabel>
+                                        <FormItem className="flex items-start space-x-3 rounded-md border p-4">
                                             <FormControl>
-                                                <Input placeholder="Location" {...field} />
+                                                <Checkbox checked={field.value} onCheckedChange={field.onChange} />
                                             </FormControl>
-                                            <FormMessage />
+                                            <div className="space-y-1 leading-none">
+                                                <FormLabel>Has Insurance Coverage</FormLabel>
+                                            </div>
                                         </FormItem>
                                     )}
                                 />
                             </div>
-
-                            <FormField
-                                control={form.control}
-                                name="familyHistory"
-                                render={({ field }) => (
-                                    <FormItem>
-                                        <FormLabel>Family History</FormLabel>
-                                        <FormControl>
-                                            <Textarea placeholder="Family medical history" {...field} />
-                                        </FormControl>
-                                        <FormMessage />
-                                    </FormItem>
-                                )}
-                            />
-                        </div>
-
-                        <Separator />
-
-                        <div className="space-y-4">
-                            <h3 className="font-semibold">Vital Signs</h3>
-
-                            <div className="grid grid-cols-2 md:grid-cols-3 gap-4">
-                                <FormField
-                                    control={form.control}
-                                    name="temperature"
-                                    render={({ field }) => (
-                                        <FormItem>
-                                            <FormLabel>Temp (°C)</FormLabel>
-                                            <FormControl>
-                                                <Input type="number" step="0.1" placeholder="37.5" {...field} />
-                                            </FormControl>
-                                            <FormMessage />
-                                        </FormItem>
-                                    )}
-                                />
-
-                                <FormField
-                                    control={form.control}
-                                    name="heartRate"
-                                    render={({ field }) => (
-                                        <FormItem>
-                                            <FormLabel>HR (bpm)</FormLabel>
-                                            <FormControl>
-                                                <Input type="number" placeholder="80" {...field} />
-                                            </FormControl>
-                                            <FormMessage />
-                                        </FormItem>
-                                    )}
-                                />
-
-                                <FormField
-                                    control={form.control}
-                                    name="bloodPressure"
-                                    render={({ field }) => (
-                                        <FormItem>
-                                            <FormLabel>BP</FormLabel>
-                                            <FormControl>
-                                                <Input placeholder="120/80" {...field} />
-                                            </FormControl>
-                                            <FormMessage />
-                                        </FormItem>
-                                    )}
-                                />
-
-                                <FormField
-                                    control={form.control}
-                                    name="respiratoryRate"
-                                    render={({ field }) => (
-                                        <FormItem>
-                                            <FormLabel>RR (/min)</FormLabel>
-                                            <FormControl>
-                                                <Input type="number" placeholder="16" {...field} />
-                                            </FormControl>
-                                            <FormMessage />
-                                        </FormItem>
-                                    )}
-                                />
-
-                                <FormField
-                                    control={form.control}
-                                    name="oxygenSaturation"
-                                    render={({ field }) => (
-                                        <FormItem>
-                                            <FormLabel>SpO2 (%)</FormLabel>
-                                            <FormControl>
-                                                <Input type="number" placeholder="98" {...field} />
-                                            </FormControl>
-                                            <FormMessage />
-                                        </FormItem>
-                                    )}
-                                />
-                            </div>
-                        </div>
-
-                        <Separator />
-
-                        <div className="space-y-4">
-                            <h3 className="font-semibold">Lab Results</h3>
-
-                            <FormField
-                                control={form.control}
-                                name="labResults"
-                                render={({ field }) => (
-                                    <FormItem>
-                                        <FormLabel>Lab Results</FormLabel>
-                                        <FormControl>
-                                            <Textarea placeholder="WBC, CRP, etc." className="min-h-[80px]" {...field} />
-                                        </FormControl>
-                                        <FormMessage />
-                                    </FormItem>
-                                )}
-                            />
                         </div>
 
                         {error && (
@@ -479,10 +559,10 @@ export default function PatientIntakeForm() {
                             {isPending ? (
                                 <>
                                     <Loader2Icon className="size-4 mr-2 animate-spin" />
-                                    Creating Patient Case...
+                                    Assessing Risk...
                                 </>
                             ) : (
-                                'Submit Patient Information'
+                                'Calculate Diabetes Risk'
                             )}
                         </Button>
                     </form>

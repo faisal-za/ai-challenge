@@ -2,7 +2,7 @@
 import { Mastra } from '@mastra/core/mastra';
 import { PinoLogger } from '@mastra/loggers';
 import { LibSQLStore } from '@mastra/libsql';
-import { ICDDiagnosticAgent } from './agents';
+import { RiskAssessmentAgent } from './agents';
 import { PineconeVector } from '@mastra/pinecone';
 
 const pinecone = new PineconeVector({
@@ -15,7 +15,7 @@ const MemoryStorage = new LibSQLStore({
 })
 
 export const mastra = new Mastra({
-    agents: { ICDDiagnosticAgent },
+    agents: { RiskAssessmentAgent },
     vectors: { pinecone },
     storage: MemoryStorage,
     logger: new PinoLogger({
@@ -23,4 +23,4 @@ export const mastra = new Mastra({
         level: 'info',
     }),
     telemetry: { enabled: true }
-});
+})

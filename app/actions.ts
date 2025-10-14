@@ -3,7 +3,7 @@
 import { mastra } from "@/mastra";
 import { convertMessages } from "@mastra/core/agent"
 
-const myAgent = mastra.getAgent("ICDDiagnosticAgent");
+const myAgent = mastra.getAgent("RiskAssessmentAgent");
 
 export async function Threads({ threadId = "" }) {
 
@@ -34,7 +34,7 @@ export async function CreateThread({ resourceId = "demo" }) {
     return thread;
 }
 
-export async function CreateThreadWithMessage({ resourceId = "demo" }: {
+export async function CreateThreadWithMessage({ message, resourceId = "demo" }: {
     message: string;
     resourceId?: string;
 }) {

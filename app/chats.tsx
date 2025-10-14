@@ -28,7 +28,6 @@ export default function Chats({ threads }: { threads: StorageThreadType[] | unde
     return (
         <>
             <SidebarHeader>
-                <h1 className="text-lg font-bold px-2">ICD-11 Diagnostic</h1>
                 <Button
                     className='w-full cursor-pointer'
                     onClick={handleNewChat}

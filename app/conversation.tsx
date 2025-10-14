@@ -10,13 +10,7 @@ import {
 } from '@/components/ai-elements/conversation';
 import { Message, MessageContent } from '@/components/ai-elements/message';
 import { CopyIcon, ThumbsDownIcon, MessageSquareIcon } from 'lucide-react';
-import {
-    PromptInput,
-    PromptInputBody,
-    PromptInputSubmit,
-    PromptInputTextarea,
-    PromptInputToolbar,
-} from '@/components/ai-elements/prompt-input';
+import { Button } from '@/components/ui/button';
 import { Actions, Action } from '@/components/ai-elements/actions';
 import { ThumbsUpIcon } from 'lucide-react';
 import { Response } from '@/components/ai-elements/response';
@@ -34,6 +28,7 @@ const Component = ({ threadId = "", initialMessage = "" }) => {
 
     const [input, setInput] = useState("");
     const initialMessageSentRef = useRef(false);
+    const shouldFetchMessagesRef = useRef(!initialMessage); // Only fetch if NO initial message
     const router = useRouter();
 
     const { messages, status, sendMessage, setMessages } = useChat({
@@ -42,26 +37,43 @@ const Component = ({ threadId = "", initialMessage = "" }) => {
             body: { thread: threadId },
         }),
 
-        onData: (data) => console.log('Chat data:', data),
-        onError: (error) => console.error('Chat error:', error),
-        onToolCall: (toolCall) => console.log('Tool call:', toolCall),
-        onFinish: () => console.log('Chat finished'),
+        onData: (data) => console.log('[CONV] Chat data:', data),
+        onError: (error) => console.error('[CONV] Chat error:', error),
+        onToolCall: (toolCall) => console.log('[CONV] Tool call:', toolCall),
+        onFinish: () => {
+            console.log('[CONV] Chat finished');
+            // Now that initial exchange is complete, enable fetching for future navigations
+            shouldFetchMessagesRef.current = true;
+        },
     });
 
     useEffect(() => {
-        console.log("Chat status:", status);
+        console.log("[CONV] Effect triggered - threadId:", threadId);
+        console.log("[CONV] shouldFetchMessagesRef:", shouldFetchMessagesRef.current);
+        console.log("[CONV] Chat status:", status);
 
-        const intialMessages = Threads({ threadId })
+        // Only fetch messages if we should (no initial message to send)
+        if (!shouldFetchMessagesRef.current) {
+            console.log('[CONV] Skipping fetch - initial message will be sent instead');
+            return;
+        }
 
-        intialMessages.then((msgs) => {
-            setMessages(msgs)
-        })
+        const loadMessages = async () => {
+            console.log('[CONV] Fetching messages from thread');
+            const msgs = await Threads({ threadId });
+            console.log('[CONV] Fetched messages count:', msgs.length);
+            setMessages(msgs);
+            console.log('[CONV] Messages set in state');
+        };
 
-    }, [threadId])
+        if (threadId) {
+            loadMessages();
+        }
+    }, [threadId, setMessages])
 
     useEffect(() => {
         if (initialMessage && threadId && !initialMessageSentRef.current) {
-            console.log('Sending initial message once:', initialMessage);
+            console.log('[CONV] Sending initial message once:', initialMessage);
             initialMessageSentRef.current = true;
             sendMessage({ text: initialMessage });
 
@@ -82,8 +94,8 @@ const Component = ({ threadId = "", initialMessage = "" }) => {
                     {messages.length === 0 ? (
                         <ConversationEmptyState
                             icon={<MessageSquareIcon className="size-6" />}
-                            title="Start a conversation"
-                            description="Messages will appear here as the conversation progresses."
+                            title="Diabetes Risk Assessment"
+                            description="Patient risk analysis will appear here after form submission."
                         >
                             <Spinner />
                         </ConversationEmptyState>
@@ -107,7 +119,7 @@ const Component = ({ threadId = "", initialMessage = "" }) => {
                                     {otherParts.map((part, index) => (
                                         <React.Fragment key={index}>
                                             {part.type === 'text' && (
-                                                <MessageContent >
+                                                <MessageContent>
                                                     <Response className={status === "streaming" ? "animate-fade-in animate-duration-500" : ""}>{part.text}</Response>
                                                 </MessageContent>
                                             )}
@@ -138,22 +150,18 @@ const Component = ({ threadId = "", initialMessage = "" }) => {
                     <Spinner variant={"ellipsis"} className=' size-6' />
                 </div>
             )}
-            <PromptInput onSubmit={(e) => {
-                if (input.trim()) {
-                    sendMessage({ text: input });
-                    setInput('');
-                }
-            }} className="px-4 relative">
-                <PromptInputBody>
-                    <PromptInputTextarea onChange={e => setInput(e.target.value)} value={input} />
-                </PromptInputBody>
-                <PromptInputToolbar>
-                    <PromptInputSubmit
-                        disabled={false}
-                        status={'ready'}
-                    />
-                </PromptInputToolbar>
-            </PromptInput>
+            <div className="px-4 py-3 border-t bg-background flex justify-center">
+                <Button
+                    onClick={() => router.push('/case')}
+                    variant="default"
+                    size="lg"
+                    className="w-full max-w-md cursor-pointer"
+                    disabled={status === "streaming" || status === "loading"}
+                >
+                    <MessageSquareIcon className="size-4 mr-2" />
+                    New Patient Assessment
+                </Button>
+            </div>
         </div >
     );
 };

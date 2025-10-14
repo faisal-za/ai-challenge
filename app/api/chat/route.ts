@@ -1,6 +1,6 @@
 import { mastra } from "@/mastra";
 
-const myAgent = mastra.getAgent("ICDDiagnosticAgent");
+const myAgent = mastra.getAgent("RiskAssessmentAgent");
 export async function POST(req: Request) {
 
   const { messages, thread } = await req.json();

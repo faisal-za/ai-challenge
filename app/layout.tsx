@@ -3,7 +3,8 @@ import { Geist, Geist_Mono } from "next/font/google";
 import "./globals.css";
 import { mastra } from "@/mastra";
 import Chats from "./chats";
-import { SidebarProvider, Sidebar, SidebarContent, SidebarInset } from "@/components/ui/sidebar";
+import { SidebarProvider, Sidebar, SidebarContent, SidebarInset, SidebarHeader } from "@/components/ui/sidebar";
+import Image from "next/image";
 
 const geistSans = Geist({
   variable: "--font-geist-sans",
@@ -16,11 +17,11 @@ const geistMono = Geist_Mono({
 });
 
 export const metadata: Metadata = {
-  title: "ICD-11 Diagnostic System",
-  description: "Clinical decision support powered by WHO ICD-11 classification",
+  title: "مبكر - Diabetes Risk Assessment",
+  description: "AI-powered diabetes risk assessment and clinical decision support system",
 };
 
-const agent = mastra.getAgent("ICDDiagnosticAgent");
+const agent = mastra.getAgent("RiskAssessmentAgent");
 
 export default async function RootLayout({
   children,
@@ -48,6 +49,15 @@ export default async function RootLayout({
       >
         <SidebarProvider>
           <Sidebar>
+            <SidebarHeader>
+              <Image
+                className="mx-auto"
+                src={"/logo.png"}
+                width={100}
+                height={50}
+                alt=""
+              />
+            </SidebarHeader>
             <SidebarContent>
               <Chats threads={threads} />
             </SidebarContent>
