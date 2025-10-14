@@ -652,7 +652,7 @@ export default function RiskAssessmentForm() {
                                 <div className="md:col-span-2">
                                     <div className="space-y-3">
                                         <label className="text-sm font-medium leading-none">
-                                            Do you know the Patient's BMI? <span className="text-red-600">*</span>
+                                            {" Do you know the Patient's BMI?"} <span className="text-red-600">*</span>
                                         </label>
                                         <RadioGroup
                                             value={knowsBMI}
@@ -891,7 +891,7 @@ export default function RiskAssessmentForm() {
                             <div className="grid md:grid-cols-2 gap-4">
                                 <div className="space-y-3">
                                     <FormLabel>
-                                        Do you know the Patient&aposs Blood Pressure? <span className="text-red-600">*</span>
+                                        {"Do you know the Patient's Blood Pressure?"} <span className="text-red-600">*</span>
                                     </FormLabel>
                                     <RadioGroup
                                         value={knowsBP}
