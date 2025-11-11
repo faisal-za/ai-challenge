@@ -32,15 +32,35 @@ export const webSearchItemTool = createTool({
       // Initialize Tavily client (reads from TAVILY_API_KEY env var)
       const client = tavily({ apiKey: process.env.TAVILY_API_KEY });
 
-      // Build search query in the appropriate language
+      // Build search query with comprehensive context
       let searchQuery = '';
       if (language === 'ar') {
-        searchQuery = `"${itemDescription}" مواد بناء مواصفات`;
+        searchQuery = `"${itemDescription}" أنواع ومواصفات استخدامات مواد البناء`;
+
+        // Add category hints for specialized materials
+        if (itemDescription.includes('طينة') || itemDescription.includes('لاصق')) {
+          searchQuery += ' منتجات عزل تطبيقات';
+        } else if (itemDescription.includes('إبوكسي') || itemDescription.includes('راتنج')) {
+          searchQuery += ' درجات تطبيقات صناعية';
+        } else if (itemDescription.includes('بوليمر')) {
+          searchQuery += ' أنواع خصائص استخدامات';
+        }
+
         if (rfqContext) {
           searchQuery += ` ${rfqContext}`;
         }
       } else {
-        searchQuery = `"${itemDescription}" construction material specifications`;
+        searchQuery = `"${itemDescription}" types specifications uses construction industry standards`;
+
+        // Add category hints for specialized materials
+        if (itemDescription.toLowerCase().includes('coating') || itemDescription.toLowerCase().includes('adhesive')) {
+          searchQuery += ' products applications grades';
+        } else if (itemDescription.toLowerCase().includes('epoxy') || itemDescription.toLowerCase().includes('resin')) {
+          searchQuery += ' grades industrial applications';
+        } else if (itemDescription.toLowerCase().includes('polymer')) {
+          searchQuery += ' types properties uses';
+        }
+
         if (rfqContext) {
           searchQuery += ` ${rfqContext}`;
         }
@@ -48,14 +68,14 @@ export const webSearchItemTool = createTool({
 
       console.log(`[Web Search] Searching for: ${searchQuery}`);
 
-      // Perform Tavily search
+      // Perform Tavily search with enhanced parameters
       const response = await client.search(searchQuery, {
-        searchDepth: 'basic',
-        maxResults: 5,
+        searchDepth: 'advanced',
+        maxResults: 7,
         language: language,
-        includeAnswer: true,
-        includeRawContent: false,
-        timeout: 30
+        includeAnswer: 'advanced',
+        includeRawContent: 'markdown',
+        timeout: 45
       });
 
       // Check if we got an answer

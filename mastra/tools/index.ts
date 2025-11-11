@@ -209,9 +209,9 @@ export const predictDiabetesRiskTool = createTool({
 
 // Export RFQ tools
 // catalogLookupTool - DISABLED (kept in codebase but not exported)
-// unitsValidateTool - DEPRECATED, replaced by unitsReference
-export { unitsReference } from './unitsReference';
-export { materialReference } from './materialReference';
+// unitsValidateTool - DEPRECATED
+// unitsReference - REMOVED (LLM has natural knowledge)
+// materialReference - REMOVED (LLM has natural knowledge)
 export { webSearchItemTool } from './webSearchItem';
 
 // Export MongoDB tools
