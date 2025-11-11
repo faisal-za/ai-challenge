@@ -2,7 +2,7 @@
 import { Mastra } from '@mastra/core/mastra';
 import { PinoLogger } from '@mastra/loggers';
 import { LibSQLStore } from '@mastra/libsql';
-import { RiskAssessmentAgent } from './agents';
+import { RiskAssessmentAgent, RFQAgent } from './agents';
 import { PineconeVector } from '@mastra/pinecone';
 
 const pinecone = new PineconeVector({
@@ -15,7 +15,7 @@ const MemoryStorage = new LibSQLStore({
 })
 
 export const mastra = new Mastra({
-    agents: { RiskAssessmentAgent },
+    agents: { RiskAssessmentAgent, RFQAgent },
     vectors: { pinecone },
     storage: MemoryStorage,
     logger: new PinoLogger({

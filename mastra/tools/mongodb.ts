@@ -1,257 +1,326 @@
 import { createTool } from '@mastra/core/tools';
 import { z } from 'zod';
 import { connectToMongoDB } from '@/lib/mongodb';
+import { buildFeatures, type PatientInput, FEATURE_ORDER } from '@/lib/featureEngineering';
+import { generateDiabetesLabel, type LabelInput } from '@/lib/labelGeneration';
 
-function featuresFromPatient(patient) {
-    try {
-
-    
-  const today = new Date();
-    console.log("Calculating started")
-  // --- Helpers ---
-  const toDate = (d) => d ? new Date(d) : null;
-  const daysBetween = (a, b = today) => Math.floor((b - a) / (1000*60*60*24));
-  const num = (x) => (x === null || x === undefined || x === '') ? null : Number(x);
-
-  // latest obs by description/code
-  const obs = Array.isArray(patient.observations) ? patient.observations : [];
-  const latestObs = (pred) => {
-    const cand = obs
-      .filter(pred)
-      .sort((a,b) => new Date(b.date) - new Date(a.date))[0];
-    return cand ? (cand.type === 'numeric' ? num(cand.value) : cand.value) : null;
-  };
-  const byDesc = (s) => (o) => (o.description || '').toLowerCase().includes(s.toLowerCase());
-  const byCode = (c) => (o) => (o.code || '').toString() === c.toString();
-
-  // --- Patient core fields ---
-  // DOB may be in patient.age (DOB Date) or patient.BIRTHDATE
-  const dob = toDate(patient.BIRTHDATE || patient.age);
-  let Age = null;
-  if (dob) {
-    Age = today.getFullYear() - dob.getFullYear();
-    const m = today.getMonth() - dob.getMonth();
-    if (m < 0 || (m === 0 && today.getDate() < dob.getDate())) Age--;
-  }
-
-  // --- Observations (latest) ---
-  const heightCm = latestObs(byDesc('Body Height')) ?? latestObs(byCode('8302-2'));
-  const weightKg = latestObs(byDesc('Body Weight')) ?? latestObs(byCode('29463-7'));
-
-  const systolic = latestObs(byDesc('Systolic Blood Pressure')) ?? latestObs(byCode('8480-6'));
-  const diastolic = latestObs(byDesc('Diastolic Blood Pressure')) ?? latestObs(byCode('8462-4'));
-
-  const glucose = latestObs(byDesc('Glucose')); // add code if available
-  const hba1cVal = latestObs(byDesc('Hemoglobin A1c')) ?? latestObs(byDesc('HbA1c')) ?? latestObs(byCode('4548-4'));
-
-  const tg = latestObs(byDesc('Triglycerides'));
-  const hdl = latestObs(byDesc('HDL'));
-  const ldl = latestObs(byDesc('LDL'));
-
-  const smokingVal = latestObs(byDesc('Tobacco smoking status NHIS'));
-
-  // --- Derived from observations ---
-  const heightM = heightCm ? heightCm/100 : null;
-  const BMI = (weightKg && heightM) ? (weightKg / (heightM*heightM)) : null;
-
-  let BMI_Category = null;
-  if (BMI != null) {
-    if (BMI < 25) BMI_Category = 'Normal';
-    else if (BMI < 30) BMI_Category = 'Overweight';
-    else BMI_Category = 'Obese';
-  }
-
-  // BP per your rule: High if >=140/90, else Normal
-  let BloodPressure_Status = null;
-  if (systolic != null && diastolic != null) {
-    BloodPressure_Status = (systolic >= 140 || diastolic >= 90) ? 'High' : 'Normal';
-  }
-
-  let Glucose_Status = null;
-  if (glucose != null) {
-    Glucose_Status = (glucose < 100) ? 'Normal' : (glucose < 126) ? 'Prediabetes' : 'Diabetes';
-  }
-
-  let HbA1c_Status = null;
-  if (hba1cVal != null) {
-    HbA1c_Status = (hba1cVal < 5.7) ? 'Normal' : (hba1cVal < 6.5) ? 'Prediabetes' : 'Diabetes';
-  }
-
-  // If LDL/HDL missing but Total Chol & TG exist, you can derive using Friedewald if you add Total Chol extraction.
-  let Dyslipidemia_Flag = null;
-  if (tg != null && hdl != null && ldl != null) {
-    Dyslipidemia_Flag = (tg > 150 || hdl < 40 || ldl > 130) ? 1 : 0;
-  }
-
-  const Smoking_Flag = (typeof smokingVal === 'string')
-    ? (smokingVal.toLowerCase().includes('never') ? 0 : 1)
-    : 0;
-
-  // --- Conditions ---
-  const conds = Array.isArray(patient.conditions) ? patient.conditions : [];
-  // Count only specific chronic diseases per table
-  const chronicSet = ['diabetes','hypertension','dyslipidemia'];
-  const Chronic_Conditions_Count = conds.filter(c =>
-    chronicSet.some(k => (c.description || '').toLowerCase().includes(k))
-  ).length;
-
-  // Duration = sum over conditions; if STOP empty/undefined -> today
-  const Condition_Duration_Days = conds.reduce((sum, c) => {
-    const start = toDate(c.start || c.START);
-    const stop = toDate(c.stop || c.STOP) || today;
-    return start ? (sum + daysBetween(start, stop)) : sum;
-  }, 0);
-
-  // --- Encounters ---
-  const encs = Array.isArray(patient.encounters) ? patient.encounters : [];
-  const Encounters_Last_12m = encs.filter(e => {
-    const s = toDate(e.start || e.START);
-    return s && (today - s) <= 365*24*60*60*1000;
-  }).length;
-
-  let Time_Since_Last_Encounter_Days = null;
-  if (encs.length) {
-    const last = encs
-      .map(e => toDate(e.start || e.START))
-      .filter(Boolean)
-      .sort((a,b) => b - a)[0];
-    if (last) Time_Since_Last_Encounter_Days = daysBetween(last, today);
-  }
-
-  const Has_Reason_For_Encounter = encs.some(e => String(e.has_reason || e.HAS_REASON).toLowerCase() === 'yes') ? 1 : 0;
-  const Insurance_Coverage_Flag = encs.some(e => (num(e.payer_coverage || e.PAYER_COVERAGE) || 0) > 0) ? 1 : 0;
-
-  // --- Medications ---
-  const meds = Array.isArray(patient.medications) ? patient.medications : [];
-  // Adherence: sum of DISPENSES_CAP per table, then bucket
-  const totalDispensesCap = meds.reduce((s, m) => s + (num(m.dispenses_cap || m.DISPENSES_CAP) || 0), 0);
-  const Medication_Adherence_Level = (totalDispensesCap >= 12) ? 'High' : (totalDispensesCap >= 6) ? 'Medium' : 'Low';
-
-  // Chronic meds: description contains antidiabetic/antihypertensive/statin
-  const Chronic_Medications_Count = meds.filter(m => {
-    const d = (m.description || m.DESCRIPTION || '').toLowerCase();
-    return d.includes('antidiabetic') || d.includes('antihypertensive') || d.includes('statin');
-  }).length;
-
-  const Active_Medication_Flag = meds.some(m => String(m.is_active || m.IS_ACTIVE).toLowerCase() === 'yes') ? 1 : 0;
-
+/**
+ * Convert MongoDB patient document to PatientInput format for feature engineering
+ */
+function mapMongoPatientToInput(patient: any, indexDate: Date = new Date()): PatientInput {
   return {
-    patient_id: patient.id,
-    Age,
-    BMI: BMI ?? null,
-    BMI_Category,
-    BloodPressure_Status,
-    Glucose_Status,
-    HbA1c_Status,
-    Dyslipidemia_Flag,
-    Smoking_Flag,
-    Chronic_Conditions_Count,
-    Condition_Duration_Days,
-    Encounters_Last_12m,
-    Time_Since_Last_Encounter_Days,
-    Medication_Adherence_Level,
-    Chronic_Medications_Count,
-    Active_Medication_Flag,
-    Has_Reason_For_Encounter,
-    Insurance_Coverage_Flag
+    id: patient.id,
+    gender: patient.gender,
+    age: patient.age || patient.BIRTHDATE, // Birthdate field
+    indexDate,
+    observations: patient.observations || [],
+    medications: patient.medications || [],
+    conditions: patient.conditions || [],
+    encounters: patient.encounters || [],
   };
-  } catch(err){
-    console.log("Error in calculation for patient:", patient.id, err);
-    return null;
-  }
 }
 
 export const mongoDBTool = createTool({
-    id: 'mongodb-tool',
-    description: 'Read patients from MongoDB with all related data (medications, conditions, observations, encounters) joined automatically. No input parameters required.',
-    inputSchema: z.object({}),
-    outputSchema: z.object({
-        success: z.boolean(),
-        //totalPatients: z.number(),
-    }),
-    execute: async () => {
+  id: 'extract-patient-features',
+  description: 'Extract 23 ML-ready features AND generate diabetes labels from patient EHR data. Uses leakage-safe windowing (365-day lookback, 30-day gap for features; 12-month forward window for labels). Processes patients from MongoDB and stores features + labels in features-2 collection.',
+  inputSchema: z.object({}),
+  outputSchema: z.object({
+    success: z.boolean(),
+    patientsProcessed: z.number().optional(),
+    featureCount: z.number().optional(),
+    labelCounts: z
+      .object({
+        diabetes: z.number(),
+        noDiabetes: z.number(),
+        insufficientFollowup: z.number(),
+      })
+      .optional(),
+  }),
+  execute: async () => {
+    try {
+      // Connect to MongoDB
+      const { db } = await connectToMongoDB();
+
+      // Get patients collection
+      const patientsCollection = db.collection('patients');
+
+      // Build aggregation pipeline with lookups
+      const pipeline = [
+        {
+          $lookup: {
+            from: 'medications',
+            localField: 'id',
+            foreignField: 'patient',
+            as: 'medications'
+          }
+        },
+        {
+          $lookup: {
+            from: 'conditions',
+            localField: 'id',
+            foreignField: 'patient',
+            as: 'conditions'
+          }
+        },
+        {
+          $lookup: {
+            from: 'observations',
+            localField: 'id',
+            foreignField: 'patient',
+            as: 'observations'
+          }
+        },
+        {
+          $lookup: {
+            from: 'encounters',
+            localField: 'id',
+            foreignField: 'patient',
+            as: 'encounters'
+          }
+        },
+        { $skip: 0 },
+        { $limit: 10000 },  // Process all available patients
+      ];
+
+      // Execute aggregation
+      const patients = await patientsCollection.aggregate(pipeline).toArray();
+
+      // Get features collection
+      const featuresCollection = db.collection('features-2');
+
+      // Log feature engineering configuration
+      const featureConfig = {
+        lookbackDays: 365,
+        gapDays: 30,
+        trendDays: 90,
+        glucoseFastingThresholdDiabetes: 126,
+        hba1cHighThresholdDiabetes: 6.5,
+      };
+
+      console.log(`\n=== Feature Engineering Configuration ===`);
+      console.log(`  lookbackDays: ${featureConfig.lookbackDays}`);
+      console.log(`  gapDays: ${featureConfig.gapDays}`);
+      console.log(`  trendDays: ${featureConfig.trendDays}`);
+      console.log(`  glucoseFastingThresholdDiabetes: ${featureConfig.glucoseFastingThresholdDiabetes} mg/dL`);
+      console.log(`  hba1cHighThresholdDiabetes: ${featureConfig.hba1cHighThresholdDiabetes}%`);
+      console.log(`  Validation ranges:`);
+      console.log(`    BMI: 10-80`);
+      console.log(`    Glucose: 50-600 mg/dL`);
+      console.log(`    HbA1c: 4-15%`);
+      console.log(`    BP systolic: 60-250 mmHg`);
+      console.log(`    BP diastolic: 40-150 mmHg`);
+      console.log(`    LDL: 20-300 mg/dL`);
+      console.log(`\nProcessing ${patients.length} patients...`);
+
+      // Statistics for labels
+      const labelCounts = {
+        diabetes: 0,
+        noDiabetes: 0,
+        insufficientFollowup: 0,
+      };
+
+      const features = patients.map((patient, index) => {
         try {
-            // Connect to MongoDB
-            const { db } = await connectToMongoDB();
+          console.log(`\n[Patient ${index + 1}/${patients.length}] ID: ${patient.id}`);
 
-            // Get patients collection
-            const patientsCollection = db.collection('patients');
+          // Calculate per-patient indexDate: min(last_observation, last_encounter) - 365d
+          const lastObsDates: Date[] = [];
+          const lastEncDates: Date[] = [];
 
-            // Build aggregation pipeline with lookups
-            const pipeline = [
-                {
-                    $lookup: {
-                        from: 'medications',
-                        localField: 'id',
-                        foreignField: 'patient',
-                        as: 'medications'
-                    }
-                },
-                {
-                    $lookup: {
-                        from: 'conditions',
-                        localField: 'id',
-                        foreignField: 'patient',
-                        as: 'conditions'
-                    }
-                },
-                {
-                    $lookup: {
-                        from: 'observations',
-                        localField: 'id',
-                        foreignField: 'patient',
-                        as: 'observations'
-                    }
-                },
-                {
-                    $lookup: {
-                        from: 'encounters',
-                        localField: 'id',
-                        foreignField: 'patient',
-                        as: 'encounters'
-                    }
-                },
-                { $skip: 1150 },
-                { $limit: 100 },
-            ];
+          // Get latest observation date
+          if (patient.observations && patient.observations.length > 0) {
+            patient.observations.forEach((obs: any) => {
+              const obsDate = obs.date || obs.timestamp;
+              if (obsDate) lastObsDates.push(new Date(obsDate));
+            });
+          }
 
-            // Execute aggregation
-            const patients = await patientsCollection.aggregate(pipeline).toArray();
+          // Get latest encounter date
+          if (patient.encounters && patient.encounters.length > 0) {
+            patient.encounters.forEach((enc: any) => {
+              const encDate = enc.start;
+              if (encDate) lastEncDates.push(new Date(encDate));
+            });
+          }
 
-            // Get features collection
-            const featuresCollection = db.collection('features');
+          // Calculate max available times
+          const lastObsTime = lastObsDates.length > 0
+            ? Math.max(...lastObsDates.map(d => d.getTime()))
+            : 0;
+          const lastEncTime = lastEncDates.length > 0
+            ? Math.max(...lastEncDates.map(d => d.getTime()))
+            : 0;
 
-            // Loop through each patient and perform calculations
-            console.log(`Processing ${patients.length} patients...`);
+          // Take min of the two (earliest end of data)
+          const maxAvailableTime = lastObsTime > 0 && lastEncTime > 0
+            ? Math.min(lastObsTime, lastEncTime)
+            : (lastObsTime > 0 ? lastObsTime : lastEncTime);
 
-            const features = patients.map((patient, index) => {
-                console.log(`Processing patient ${index + 1}/${patients.length}`);
-                const result = featuresFromPatient(patient);
-                console.log(`Patient ${index + 1} result:`, result ? 'success' : 'failed');
-                return result;
-            }).filter(f => f !== null && f !== undefined);
+          // Check if we have sufficient data
+          if (maxAvailableTime === 0) {
+            console.log(`  Patient ${index + 1}: No observation or encounter data, skipping`);
+            return null;
+          }
 
-            console.log(`Successfully calculated ${features.length} features`);
+          // indexDate = maxAvailableTime - 365 days
+          const indexDate = new Date(maxAvailableTime);
+          indexDate.setDate(indexDate.getDate() - 365);
 
-            // Insert features into features collection
-            if (features.length > 0) {
-                console.log(`Inserting ${features.length} features...`);
-                await featuresCollection.insertMany(features);
-                console.log(`Successfully inserted ${features.length} features into features collection`);
-            } else {
-                console.log('No features to insert');
-            }
+          // Observability check: require at least 12 months of follow-up after indexDate
+          const requiredFollowupEnd = new Date(indexDate);
+          requiredFollowupEnd.setFullYear(requiredFollowupEnd.getFullYear() + 1);
 
-            return {
-                success: true,
-            }
+          if (maxAvailableTime < requiredFollowupEnd.getTime()) {
+            console.log(
+              `  Patient ${index + 1}: Insufficient follow-up (max: ${new Date(maxAvailableTime).toISOString().split('T')[0]}, need: ${requiredFollowupEnd.toISOString().split('T')[0]}), will get label=null`
+            );
+            // Continue processing but label will be null due to insufficient follow-up
+          }
 
+          console.log(`  Index Date: ${indexDate.toISOString().split('T')[0]}`);
+          console.log(`  Observations: ${patient.observations?.length || 0}`);
+          console.log(`  Medications: ${patient.medications?.length || 0}`);
+          console.log(`  Encounters: ${patient.encounters?.length || 0}`);
+
+          // Convert MongoDB patient to PatientInput format
+          const patientInput = mapMongoPatientToInput(patient, indexDate);
+
+          // Extract ML-ready features using new feature engineering module
+          const mlFeatures = buildFeatures(patientInput, featureConfig);
+
+          // Debug: Log key features to verify per-patient variation
+          console.log(`  Features extracted:`);
+          console.log(`    BMI mean: ${mlFeatures.bmi_mean_365d}`);
+          console.log(`    BMI min: ${mlFeatures.bmi_min_365d}`);
+          console.log(`    BMI max: ${mlFeatures.bmi_max_365d}`);
+          console.log(`    BMI trend: ${mlFeatures.bmi_trend_90d}`);
+          console.log(`    BP sys mean: ${mlFeatures.bp_sys_mean_365d}`);
+          console.log(`    Glucose fasting mean: ${mlFeatures.glucose_fasting_mean_365d}`);
+          console.log(`    HbA1c mean: ${mlFeatures.hba1c_prev_mean_365d}`);
+          console.log(`    Chronic conditions: ${mlFeatures.chronic_conditions_count}`);
+          console.log(`    Encounters last 365d: ${mlFeatures.encounters_last_365d}`);
+
+          // Generate diabetes label using same patient data
+          const labelInput: LabelInput = {
+            id: patient.id,
+            indexDate,
+            observations: patient.observations || [],
+            medications: patient.medications || [],
+            encounters: patient.encounters || [],
+            conditions: patient.conditions || [],
+          };
+
+          const labelResult = generateDiabetesLabel(labelInput);
+          console.log(
+            `Patient ${index + 1} label: ${labelResult.label_diabetes_12m === null ? 'null' : labelResult.label_diabetes_12m} (${labelResult.label_reason})`
+          );
+
+          // Update statistics
+          if (labelResult.label_diabetes_12m === 1) {
+            labelCounts.diabetes++;
+          } else if (labelResult.label_diabetes_12m === 0) {
+            labelCounts.noDiabetes++;
+          } else {
+            labelCounts.insufficientFollowup++;
+          }
+
+          // Return features + labels with patient ID
+          return {
+            patient_id: patient.id,
+            ...mlFeatures,
+            label_diabetes_12m: labelResult.label_diabetes_12m,
+            label_reason: labelResult.label_reason,
+            _indexDate: indexDate,
+            _featureEngineering: 'v2',
+            _labeledAt: new Date(),
+          };
         } catch (error) {
-            console.error('[MongoDB Tool] Error:', error);
-            return {
-                success: false,
-                totalPatients: 0,
-            };
+          console.error(`Error processing patient ${index + 1} (${patient.id}):`, error);
+          return null;
         }
-    },
+      }).filter(f => f !== null && f !== undefined);
+
+      console.log(`Successfully calculated ${features.length} features`);
+
+      // Log feature + label summary
+      if (features.length > 0) {
+        console.log('\n=== Feature Extraction & Label Generation Summary ===');
+        console.log(`Total patients processed: ${features.length}`);
+        console.log(`Feature count: ${FEATURE_ORDER.length}`);
+        console.log(`Feature names: ${FEATURE_ORDER.join(', ')}`);
+
+        const totalProcessed = labelCounts.diabetes + labelCounts.noDiabetes + labelCounts.insufficientFollowup;
+        const pctDiabetes = ((labelCounts.diabetes / totalProcessed) * 100).toFixed(1);
+        const pctNoDiabetes = ((labelCounts.noDiabetes / totalProcessed) * 100).toFixed(1);
+        const pctNull = ((labelCounts.insufficientFollowup / totalProcessed) * 100).toFixed(1);
+
+        console.log('\nLabel Distribution:');
+        console.log(`  Diabetes (1): ${labelCounts.diabetes} (${pctDiabetes}%)`);
+        console.log(`  No Diabetes (0): ${labelCounts.noDiabetes} (${pctNoDiabetes}%)`);
+        console.log(`  Insufficient Follow-up (null): ${labelCounts.insufficientFollowup} (${pctNull}%)`);
+
+        // Fail-fast assertions
+        console.log('\n=== Fail-Fast Assertions ===');
+
+        if (labelCounts.diabetes === 0 || labelCounts.noDiabetes === 0) {
+          console.error('❌ CRITICAL: Missing class in training data!');
+          console.error('\nREMEDIATION:');
+
+          if (labelCounts.noDiabetes === 0) {
+            console.error('  Problem: No negative samples (label=0) found.');
+            console.error('  Root cause: Patients lack follow-up data beyond indexDate+12m.');
+            console.error('  Solutions:');
+            console.error('    1. Process earlier patients (change $skip in mongodb.ts line 81)');
+            console.error('    2. Use synthetic data with longer temporal coverage (2+ years)');
+            console.error('    3. Relax label=0 criteria in lib/labelGeneration.ts');
+          }
+
+          if (labelCounts.diabetes === 0) {
+            console.error('  Problem: No positive samples (label=1) found.');
+            console.error('  Root cause: No patients meet diabetes diagnostic criteria.');
+            console.error('  Solutions:');
+            console.error('    1. Process different patient cohort');
+            console.error('    2. Verify LOINC codes and medication keywords');
+            console.error('    3. Check threshold values (HbA1c ≥6.5%, glucose ≥126 mg/dL)');
+          }
+
+          throw new Error('ABORT: Cannot proceed with training - missing class in dataset');
+        }
+
+        console.log('✓ Both classes present in dataset');
+        console.log(`✓ Class imbalance ratio: ${(labelCounts.diabetes / labelCounts.noDiabetes).toFixed(2)} (pos/neg)`);
+
+        if (labelCounts.diabetes / labelCounts.noDiabetes > 10 || labelCounts.noDiabetes / labelCounts.diabetes > 10) {
+          console.warn('⚠️ WARNING: Severe class imbalance detected (>10:1)');
+          console.warn('   Consider rebalancing or adjusting data selection');
+        }
+
+        console.log('\nSample document (first patient):');
+        console.log(JSON.stringify(features[0], null, 2));
+      }
+
+      // Insert features + labels into features-2 collection
+      if (features.length > 0) {
+        console.log(`\nInserting ${features.length} documents (features + labels) into 'features-2' collection...`);
+        await featuresCollection.insertMany(features);
+        console.log(`✓ Successfully inserted ${features.length} documents with features and labels`);
+      } else {
+        console.log('No features to insert');
+      }
+
+      return {
+        success: true,
+        patientsProcessed: features.length,
+        featureCount: FEATURE_ORDER.length,
+        labelCounts,
+      }
+
+    } catch (error) {
+      console.error('[MongoDB Tool] Error:', error);
+      return {
+        success: false,
+        totalPatients: 0,
+      };
+    }
+  },
 });

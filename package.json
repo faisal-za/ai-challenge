@@ -48,6 +48,7 @@
     "@radix-ui/react-slot": "^1.2.3",
     "@radix-ui/react-tooltip": "^1.2.8",
     "@radix-ui/react-use-controllable-state": "^1.2.2",
+    "@tavily/core": "^0.5.12",
     "@trigger.dev/python": "4.0.4",
     "@trigger.dev/sdk": "4.0.4",
     "@xyflow/react": "^12.8.6",
