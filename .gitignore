@@ -9,6 +9,9 @@
 !.yarn/plugins
 !.yarn/releases
 !.yarn/versions
+venv
+__pycache__/
+*.pyc
 
 # testing
 /coverage
@@ -41,3 +44,4 @@ yarn-error.log*
 # typescript
 *.tsbuildinfo
 next-env.d.ts
+.trigger
